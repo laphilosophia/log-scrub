@@ -1,8 +1,11 @@
 {
-  "name": "log-scrub",
+  "name": "@laphilosophia/log-scrub",
   "version": "1.0.0",
   "description": "CLI utility to sanitize and beautify JSON logs - redacts sensitive data with syntax highlighting",
   "main": "dist/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "scrub": "./dist/index.js"
   },
