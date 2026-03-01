@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { StrimeIngress } from './ingress/strime'
 import { Masker } from './masker'
 import { Stats } from './stats'
 import type { JsonObject, JsonValue } from './types'
@@ -116,6 +117,25 @@ describe('Masker', () => {
     ).toThrow(/Failed to read sensitive key file/)
   })
 
+  it('should throw when key file is empty', () => {
+    const fs = require('fs') as typeof import('fs')
+    const os = require('os') as typeof import('os')
+    const path = require('path') as typeof import('path')
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'log-scrub-test-'))
+    const keyPath = path.join(tempDir, 'empty.keys')
+    fs.writeFileSync(keyPath, '')
+
+    expect(
+      () =>
+        new Masker({
+          sensitiveKeys: `file:${keyPath}`,
+          replacement: '***',
+          remove: false,
+        }),
+    ).toThrow(/Sensitive key file is empty/)
+  })
+
   it('should handle global regex key patterns reliably across multiple keys', () => {
     const regexMasker = new Masker({
       sensitiveKeys: '/token/g',
@@ -176,5 +196,28 @@ describe('Stats', () => {
     stats.incrementRedacted(2)
     stats.incrementErrors()
     expect(stats.getStats()).toEqual({ total: 1, redacted: 2, errors: 1 })
+  })
+})
+
+describe('StrimeIngress', () => {
+  it('should reject empty sensitive key input', () => {
+    expect(() => new StrimeIngress(' , , ')).toThrow(/No valid sensitive keys/)
+  })
+
+  it('should fail when no projection-safe keys remain', () => {
+    const ingress = new StrimeIngress('/token/,file:keys.txt')
+
+    expect(() =>
+      ingress.processFile('input.jsonl', process.stdout, {
+        keys: '/token/,file:keys.txt',
+        replacement: '***',
+        compact: true,
+        dryRun: false,
+        stats: false,
+        remove: false,
+        strime: true,
+        color: false,
+      }),
+    ).toThrow(/No valid keys available to build Strime projection query/)
   })
 })

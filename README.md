@@ -1,7 +1,7 @@
 # Log Scrub
 
 A CLI utility that sanitizes and beautifies JSON logs from stdin.
-Automatically redacts sensitive data like passwords, tokens, and API keys while providing colorful, readable output.
+Automatically redacts sensitive data like passwords, tokens, and API keys while keeping output readable for CLI workflows.
 
 ## Features
 
@@ -11,7 +11,7 @@ Automatically redacts sensitive data like passwords, tokens, and API keys while 
 - **Customizable** - Configure which keys to redact and replacement text
 - **Regex Support** - Use regex patterns for advanced matching
 - **Config File Support** - Load settings from .logscrubrc
-- **Multiple Input Formats** - Support for JSON and logfmt formats
+- **Strime Ingress Mode** - Optional high-performance file processing via `--strime`
 - **Statistics** - Track processing statistics
 
 ## Installation
@@ -45,8 +45,9 @@ tail -f /var/log/app.log | scrub
 -c, --compact            Compact JSON output (no pretty print)
 -d, --dry-run            Show output without redaction
 -s, --stats              Show processing statistics
--rm, --remove            Remove sensitive fields completely instead of masking
--f, --format <type>      Input format: json, logfmt (default: json)
+-R, --remove             Remove sensitive fields completely instead of masking
+-S, --strime             Use Strime engine for file input processing
+--color                  Reserved flag (currently no-op)
 -V, --version            Output version number
 -h, --help               Display help
 ```
@@ -77,9 +78,6 @@ echo '{"api_key_123":"secret"}' | scrub -k "/api_key/"
 
 # Use external key file
 echo '{"mysecret":"value"}' | scrub -k file:keys.txt
-
-# Process logfmt input
-echo 'level=info message="test" password=secret' | scrub -f logfmt
 
 # Config file
 # Create .logscrubrc in current directory or home:
