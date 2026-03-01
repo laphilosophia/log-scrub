@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta
 
 OUTPUT_FILE = "dataset.json"
-TARGET_SIZE = 1024 * 1024 * 1024 * 5  # 5GB
+TARGET_SIZE = 1024 * 1024 * 1024 * 1  # 1GB
 
 def rand_str(n=32):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=n))

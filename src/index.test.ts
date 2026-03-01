@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { Masker } from './masker'
 import { Stats } from './stats'
 import type { JsonObject, JsonValue } from './types'
@@ -31,7 +31,12 @@ describe('Masker', () => {
   })
 
   it('should redact fields in arrays', () => {
-    const input: JsonObject = { users: [{ name: 'john', password: 'secret1' }, { name: 'jane', password: 'secret2' }] }
+    const input: JsonObject = {
+      users: [
+        { name: 'john', password: 'secret1' },
+        { name: 'jane', password: 'secret2' },
+      ],
+    }
     const result = masker.mask(input) as JsonObject
     const users = result.users as JsonValue[]
     expect((users[0] as JsonObject).password).toBe('***** [REDACTED] *****')
@@ -98,6 +103,44 @@ describe('Masker', () => {
     const input: JsonObject = { password: 'secret', token: 'abc' }
     masker.mask(input)
     expect(masker.getRedactedCount()).toBe(2)
+  })
+
+  it('should throw when key file does not exist', () => {
+    expect(
+      () =>
+        new Masker({
+          sensitiveKeys: 'file:./does-not-exist.keys',
+          replacement: '***',
+          remove: false,
+        }),
+    ).toThrow(/Failed to read sensitive key file/)
+  })
+
+  it('should handle global regex key patterns reliably across multiple keys', () => {
+    const regexMasker = new Masker({
+      sensitiveKeys: '/token/g',
+      replacement: '***',
+      remove: false,
+    })
+
+    const input: JsonObject = { token: 'a', token_backup: 'b', another_token: 'c' }
+    const result = regexMasker.mask(input) as JsonObject
+
+    expect(result.token).toBe('***')
+    expect(result.token_backup).toBe('***')
+    expect(result.another_token).toBe('***')
+  })
+
+  it('should keep JSON valid when remove option is used in string masking', () => {
+    const remover = new Masker({
+      sensitiveKeys: 'password',
+      replacement: '',
+      remove: true,
+    })
+
+    const result = remover.maskString('{"name":"john","password":"secret","role":"admin"}')
+    expect(() => JSON.parse(result)).not.toThrow()
+    expect(JSON.parse(result)).toEqual({ name: 'john', role: 'admin' })
   })
 
   it('should mask string without parsing JSON', () => {

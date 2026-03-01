@@ -1,16 +1,18 @@
-import type { JsonValue } from '../types'
 import * as fs from 'fs'
 import * as path from 'path'
+import type { JsonValue } from '../types'
 
-type SensitivePattern = {
-  type: 'string'
-  value: string
-  regex: RegExp
-} | {
-  type: 'regex'
-  value: RegExp
-  regex: RegExp
-}
+type SensitivePattern =
+  | {
+      type: 'string'
+      value: string
+      regex: RegExp
+    }
+  | {
+      type: 'regex'
+      value: RegExp
+      regex: RegExp
+    }
 
 export interface MaskerOptions {
   sensitiveKeys: string
@@ -26,6 +28,9 @@ export class Masker {
 
   constructor(options: MaskerOptions) {
     this.patterns = this.parseKeys(options.sensitiveKeys)
+    if (this.patterns.length === 0) {
+      throw new Error('No sensitive key patterns could be loaded')
+    }
     this.replacement = options.replacement
     this.remove = options.remove
   }
@@ -40,15 +45,26 @@ export class Masker {
   }
 
   private loadKeysFromFile(filePath: string): SensitivePattern[] {
+    const resolvedPath = path.resolve(filePath)
+
+    let content: string
+
     try {
-      const content = fs.readFileSync(path.resolve(filePath), 'utf-8')
-      return content
-        .split('\n')
-        .filter((line: string) => line.trim() !== '')
-        .map((line: string) => this.parseKey(line.trim()))
+      content = fs.readFileSync(resolvedPath, 'utf-8')
     } catch {
-      return []
+      throw new Error(`Failed to read sensitive key file: ${resolvedPath}`)
     }
+
+    const patterns = content
+      .split('\n')
+      .filter((line: string) => line.trim() !== '')
+      .map((line: string) => this.parseKey(line.trim()))
+
+    if (patterns.length === 0) {
+      throw new Error(`Sensitive key file is empty: ${resolvedPath}`)
+    }
+
+    return patterns
   }
 
   private parseKey(key: string): SensitivePattern {
@@ -59,10 +75,7 @@ export class Masker {
     }
 
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(
-      `("${escapedKey}"\\s*:\\s*)("[^"]*"|[^,\\s][^,}]*)`,
-      'gi'
-    )
+    const regex = new RegExp(`("${escapedKey}"\\s*:\\s*)("[^"]*"|[^,\\s][^,}]*)`, 'gi')
     return { type: 'string', value: key.toLowerCase(), regex }
   }
 
@@ -70,7 +83,7 @@ export class Masker {
     this.redactedCount = 0
 
     if (this.remove) {
-      return this.removeSensitiveFields(line)
+      return this.removeSensitiveFieldsFromJson(line)
     }
 
     let result = line
@@ -85,24 +98,14 @@ export class Masker {
     return result
   }
 
-  private removeSensitiveFields(line: string): string {
-    let result = line
-
-    for (const pattern of this.patterns) {
-      const key = typeof pattern.value === 'string' 
-        ? pattern.value 
-        : pattern.value.source
-      const keyRegex = new RegExp(
-        `"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*:\\s*("[^"]*"|[^,\\s][^,}]*)?`,
-        'gi'
-      )
-      result = result.replace(keyRegex, () => {
-        this.redactedCount++
-        return ''
-      })
+  private removeSensitiveFieldsFromJson(line: string): string {
+    try {
+      const parsed = JSON.parse(line) as JsonValue
+      const masked = this.mask(parsed)
+      return JSON.stringify(masked)
+    } catch {
+      return line
     }
-
-    return result
   }
 
   mask(obj: JsonValue): JsonValue {
@@ -122,6 +125,7 @@ export class Masker {
           const lowerKey = key.toLowerCase()
           const isSensitive = this.patterns.some((p) => {
             if (p.type === 'regex') {
+              p.value.lastIndex = 0
               return p.value.test(key)
             }
             return lowerKey.includes(p.value)

@@ -1,7 +1,7 @@
 import { Engine, StrimeParser } from '@laphilosophia/strime'
+import chalk from 'chalk'
 import * as fs from 'fs'
 import * as readline from 'readline'
-import chalk from 'chalk'
 import type { Options } from '../types'
 
 export class StrimeIngress {
@@ -9,24 +9,52 @@ export class StrimeIngress {
   private sensitiveKeys: string[]
 
   constructor(sensitiveKeys: string) {
-    this.sensitiveKeys = sensitiveKeys.split(',').map((k) => k.trim())
+    this.sensitiveKeys = this.normalizeSensitiveKeys(sensitiveKeys)
+    if (this.sensitiveKeys.length === 0) {
+      throw new Error('No valid sensitive keys provided for Strime ingress')
+    }
+  }
+
+  private normalizeSensitiveKeys(rawKeys: string): string[] {
+    return rawKeys
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0)
+      .filter((k) => !k.startsWith('file:'))
+  }
+
+  private sanitizeProjectionKey(key: string): string | null {
+    if (key.startsWith('/') && key.endsWith('/')) {
+      return null
+    }
+
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? key : null
   }
 
   private buildProjectionQuery(): string {
-    return '{ ' + this.sensitiveKeys.join(', ') + ' }'
+    const projectionKeys = this.sensitiveKeys
+      .map((key) => this.sanitizeProjectionKey(key))
+      .filter((key): key is string => key !== null)
+
+    if (projectionKeys.length === 0) {
+      throw new Error('No valid keys available to build Strime projection query')
+    }
+
+    return '{ ' + projectionKeys.join(', ') + ' }'
   }
 
-  processFile(
-    inputPath: string,
-    output: NodeJS.WritableStream,
-    options: Options
-  ): void {
+  processFile(inputPath: string, output: NodeJS.WritableStream, options: Options): void {
     const query = this.buildProjectionQuery()
     console.error(chalk.gray(`Strime projection: ${query}`))
 
-    const parser = new StrimeParser(query)
-    const schema = parser.parse()
-    this.engine = new Engine(schema)
+    try {
+      const parser = new StrimeParser(query)
+      const schema = parser.parse()
+      this.engine = new Engine(schema)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown parser error'
+      throw new Error(`Failed to initialize Strime engine: ${message}`)
+    }
 
     const isNdjson = inputPath.endsWith('.ndjson') || inputPath.endsWith('.jsonl')
 
@@ -37,11 +65,7 @@ export class StrimeIngress {
     }
   }
 
-  private processNdjson(
-    inputPath: string,
-    output: NodeJS.WritableStream,
-    options: Options
-  ): void {
+  private processNdjson(inputPath: string, output: NodeJS.WritableStream, options: Options): void {
     const fileStream = fs.createReadStream(inputPath, { encoding: 'utf8' })
     const rl = readline.createInterface({
       input: fileStream,
@@ -93,15 +117,15 @@ export class StrimeIngress {
   private processSingleJsonChunked(
     inputPath: string,
     output: NodeJS.WritableStream,
-    options: Options
+    options: Options,
   ): void {
     const startTime = Date.now()
     const stats = fs.statSync(inputPath)
     const fileSize = stats.size
 
-    const fileStream = fs.createReadStream(inputPath, { 
+    const fileStream = fs.createReadStream(inputPath, {
       encoding: 'utf8',
-      highWaterMark: 64 * 1024
+      highWaterMark: 64 * 1024,
     })
 
     let buffer = ''
@@ -228,6 +252,7 @@ export class StrimeIngress {
     return this.sensitiveKeys.some((sensitive) => {
       if (sensitive.startsWith('/') && sensitive.endsWith('/')) {
         const pattern = new RegExp(sensitive.slice(1, -1))
+        pattern.lastIndex = 0
         return pattern.test(key)
       }
       return lowerKey.includes(sensitive.toLowerCase())

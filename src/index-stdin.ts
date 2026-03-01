@@ -6,11 +6,20 @@ import { opts } from './cli'
 import { Masker } from './masker'
 import { Stats } from './stats'
 
-const masker = new Masker({
-  sensitiveKeys: opts.keys,
-  replacement: opts.replacement,
-  remove: opts.remove,
-})
+let masker: Masker
+try {
+  masker = new Masker({
+    sensitiveKeys: opts.keys,
+    replacement: opts.replacement,
+    remove: opts.remove,
+  })
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Unknown initialization error'
+  console.error(chalk.red(`Error: ${message}`))
+  console.error(chalk.red('Aborting to avoid running without redaction patterns.'))
+  process.exit(1)
+}
+
 const stats = new Stats(opts.stats)
 
 const processLine = (line: string): string => {
