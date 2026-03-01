@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import chalk from 'chalk'
+import { colorize } from 'json-colorizer'
 import split from 'split2'
 import { pipeline } from 'stream'
 import { opts } from './cli'
@@ -33,13 +34,19 @@ const processLine = (line: string): string => {
     const masked = masker.maskString(line)
     stats.incrementRedacted(masker.getRedactedCount())
 
-    if (opts.compact) {
+    if (opts.compact && !opts.color) {
       return masked + '\n'
     }
 
     try {
       const parsed = JSON.parse(masked)
-      return JSON.stringify(parsed, null, 2) + '\n'
+      const formatted = opts.compact ? JSON.stringify(parsed) : JSON.stringify(parsed, null, 2)
+
+      if (opts.color) {
+        return colorize(formatted) + '\n'
+      }
+
+      return formatted + '\n'
     } catch {
       return masked + '\n'
     }

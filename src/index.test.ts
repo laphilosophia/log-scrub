@@ -170,6 +170,35 @@ describe('Masker', () => {
   })
 })
 
+it('should remove nested sensitive keys from arrays and objects', () => {
+  const remover = new Masker({
+    sensitiveKeys: 'token,password',
+    replacement: '',
+    remove: true,
+  })
+
+  const result = remover.maskString(
+    '{"users":[{"name":"john","password":"a"},{"name":"jane","token":"b"}],"meta":{"token":"c","ok":true}}',
+  )
+
+  expect(JSON.parse(result)).toEqual({
+    users: [{ name: 'john' }, { name: 'jane' }],
+    meta: { ok: true },
+  })
+})
+
+it('should return original line when remove mode receives invalid JSON', () => {
+  const remover = new Masker({
+    sensitiveKeys: 'password',
+    replacement: '',
+    remove: true,
+  })
+
+  const invalidJson = '{"password":"secret"'
+  expect(remover.maskString(invalidJson)).toBe(invalidJson)
+  expect(remover.getRedactedCount()).toBe(0)
+})
+
 describe('Stats', () => {
   it('should track total', () => {
     const stats = new Stats(false)
@@ -196,6 +225,10 @@ describe('Stats', () => {
     stats.incrementRedacted(2)
     stats.incrementErrors()
     expect(stats.getStats()).toEqual({ total: 1, redacted: 2, errors: 1 })
+  })
+
+  it('should allow mixed keys when at least one projection-safe key exists', () => {
+    expect(() => new StrimeIngress('/token/,file:keys.txt,password')).not.toThrow()
   })
 })
 

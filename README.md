@@ -12,6 +12,7 @@ Automatically redacts sensitive data like passwords, tokens, and API keys while 
 - **Regex Support** - Use regex patterns for advanced matching
 - **Config File Support** - Load settings from .logscrubrc
 - **Strime Ingress Mode** - Optional high-performance file processing via `--strime`
+- **Optional Colored JSON Output** - ANSI colorized JSON output via `--color`
 - **Statistics** - Track processing statistics
 
 ## Installation
@@ -47,7 +48,7 @@ tail -f /var/log/app.log | scrub
 -s, --stats              Show processing statistics
 -R, --remove             Remove sensitive fields completely instead of masking
 -S, --strime             Use Strime engine for file input processing
---color                  Reserved flag (currently no-op)
+--color                  Enable ANSI colorized JSON output
 -V, --version            Output version number
 -h, --help               Display help
 ```
@@ -56,7 +57,7 @@ tail -f /var/log/app.log | scrub
 
 ```bash
 # Custom keys to redact
-echo '{"username":"john","ssn":"123-45-6789"}' | scrub -k ssn,dob
+echo '{"username":"john","ssn":"123-45-6789"}' | scrub -k ssn
 
 # Custom replacement text
 echo '{"password":"secret123"}' | scrub -r "[HIDDEN]"
